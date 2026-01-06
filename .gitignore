@@ -1,0 +1,17 @@
+# Config file with API keys (create config.js from config.example.js)
+config.js
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node modules (if you add npm later)
+node_modules/
+package-lock.json
