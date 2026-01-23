@@ -1,8 +1,12 @@
+---
+---
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="Truck Leads Finder - Visualize truck leads data on Google Maps">
     <title>Truck Leads Finder - Data Visualizer</title>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -23,21 +27,32 @@
         <div id="data-info" class="data-info">
             <h3>Instructions:</h3>
             <ol>
-                <li>Set up Google Sheets API credentials</li>
-                <li>Set up Google Maps API key</li>
-                <li>Update config.js with your API keys and Sheet ID</li>
                 <li>Click "Load Data" to fetch and display locations</li>
+                <li>Use the search box to find specific companies</li>
             </ol>
         </div>
     </div>
 
-    <!-- Google Maps API -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyArUlpNWL_BCWTyGxnDe8FAKv8jADkB7OU&callback=initMap&libraries=places" async defer></script>
-
-    <!-- App Configuration -->
+    <!-- Configuration (injected at build time) -->
     <script src="config.js"></script>
 
     <!-- Main Application -->
     <script src="app.js"></script>
+
+    <!-- Google Maps API (loaded after config) -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof CONFIG !== 'undefined' && CONFIG.API_KEY) {
+                const script = document.createElement('script');
+                script.src = 'https://maps.googleapis.com/maps/api/js?key=' + CONFIG.API_KEY + '&callback=initMap&libraries=places';
+                script.async = true;
+                script.defer = true;
+                document.head.appendChild(script);
+            } else {
+                document.getElementById('status').textContent = 'Configuration not found. Check deployment.';
+                document.getElementById('status').className = 'status error';
+            }
+        });
+    </script>
 </body>
 </html>

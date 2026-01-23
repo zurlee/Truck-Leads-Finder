@@ -1,0 +1,21 @@
+# Jekyll Configuration
+title: Truck Leads Finder
+description: Truck leads data visualizer with Google Maps integration
+
+# Build settings
+markdown: kramdown
+permalink: pretty
+
+# Exclude from build
+exclude:
+  - README.md
+  - LICENSE
+  - Dockerfile
+  - docker-compose.yml
+  - server.js
+  - package.json
+  - package-lock.json
+  - node_modules
+  - .env
+  - .env.example
+  - "*.log"

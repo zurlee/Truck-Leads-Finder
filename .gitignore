@@ -1,5 +1,11 @@
-# Config file with API keys (create config.js from config.example.js)
+# Config file with API keys (injected at build time via GitHub Actions)
 config.js
+
+# Jekyll build output
+_site/
+.sass-cache/
+.jekyll-cache/
+.jekyll-metadata
 
 # OS files
 .DS_Store
@@ -12,6 +18,5 @@ Thumbs.db
 *.swo
 *~
 
-# Node modules (if you add npm later)
-node_modules/
-package-lock.json
+# Logs
+*.log

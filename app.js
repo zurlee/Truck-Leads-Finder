@@ -1,11 +1,10 @@
 let map;
 let markers = [];
 let geocoder;
-let allData = []; // Store all parsed data for searching
+let allData = [];
 
 // Initialize Google Map
 function initMap() {
-    // Default center (United States)
     const defaultCenter = { lat: 39.8283, lng: -98.5795 };
 
     map = new google.maps.Map(document.getElementById('map'), {
@@ -15,7 +14,6 @@ function initMap() {
     });
 
     geocoder = new google.maps.Geocoder();
-
     updateStatus('Map initialized. Ready to load data.');
 }
 
@@ -36,7 +34,8 @@ async function fetchSheetData() {
         const response = await fetch(url);
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch data: ${response.statusText}`);
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error?.message || `Failed to fetch data: ${response.statusText}`);
         }
 
         const data = await response.json();
@@ -80,6 +79,13 @@ function geocodeAddress(address) {
     });
 }
 
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Create marker with info window
 function createMarker(location, data) {
     const marker = new google.maps.Marker({
@@ -88,22 +94,18 @@ function createMarker(location, data) {
         title: data.name || data.address || 'Location'
     });
 
-    // Create info window content
     const infoContent = createInfoWindowContent(data);
 
     const infoWindow = new google.maps.InfoWindow({
         content: infoContent
     });
 
-    // Show info window on click
     marker.addListener('click', () => {
-        // Close all other info windows
         markers.forEach(m => {
             if (m.infoWindow) {
                 m.infoWindow.close();
             }
         });
-
         infoWindow.open(map, marker);
     });
 
@@ -117,50 +119,43 @@ function createMarker(location, data) {
 function createInfoWindowContent(data) {
     let content = '<div class="info-window">';
 
-    // Display all fields from the data
     for (const [key, value] of Object.entries(data)) {
         if (value) {
             const keyLower = key.toLowerCase();
-            let displayValue = value;
+            const escapedKey = escapeHtml(key);
+            const escapedValue = escapeHtml(value);
+            let displayValue = escapedValue;
 
-            // Make phone numbers clickable
             if (keyLower.includes('phone') || keyLower.includes('cell') || keyLower.includes('fax')) {
-                displayValue = `<a href="tel:${value}">${value}</a>`;
+                displayValue = `<a href="tel:${escapedValue}">${escapedValue}</a>`;
             }
-            // Make emails clickable
             else if (keyLower.includes('email') || keyLower.includes('mail')) {
-                displayValue = `<a href="mailto:${value}">${value}</a>`;
+                displayValue = `<a href="mailto:${escapedValue}">${escapedValue}</a>`;
             }
-            // Make cab report clickable with dot appended
             else if (keyLower === 'cab report') {
                 let url = value;
-                // Append dot value if it exists
                 if (data.dot || data.DOT || data.Dot) {
                     const dotValue = data.dot || data.DOT || data.Dot;
                     url = `${value}${dotValue}`;
                 }
-                // Ensure URL has protocol
                 if (!url.startsWith('http://') && !url.startsWith('https://')) {
                     url = 'https://' + url;
                 }
-                displayValue = `<a href="${url}" target="_blank">${key}</a>`;
+                displayValue = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapedKey}</a>`;
             }
-            // Make vitals report clickable with dot appended
             else if (keyLower === 'vitals report') {
                 let url = value;
-                // Append dot value if it exists
                 if (data.dot || data.DOT || data.Dot) {
                     const dotValue = data.dot || data.DOT || data.Dot;
                     url = `${value}${dotValue}`;
                 }
-                // Ensure URL has protocol
                 if (!url.startsWith('http://') && !url.startsWith('https://')) {
                     url = 'https://' + url;
                 }
-                displayValue = `<a href="${url}" target="_blank">${key}</a>`;
+                displayValue = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapedKey}</a>`;
             }
 
-            content += `<p><strong>${key}:</strong> ${displayValue}</p>`;
+            content += `<p><strong>${escapedKey}:</strong> ${displayValue}</p>`;
         }
     }
 
@@ -187,22 +182,19 @@ async function processAndDisplayData() {
     }
 
     const parsedData = parseSheetData(rawData);
-    allData = parsedData; // Store for searching
+    allData = parsedData;
 
     updateStatus(`Processing ${parsedData.length} records...`);
 
     let successCount = 0;
     let errorCount = 0;
 
-    // Process each record
     for (let i = 0; i < parsedData.length; i++) {
         const record = parsedData[i];
 
-        // Get latitude and longitude from sheet columns
         const lat = parseFloat(record.latitude || record.Latitude);
         const lng = parseFloat(record.longitude || record.Longitude);
 
-        // Skip if no valid coordinates
         if (isNaN(lat) || isNaN(lng)) {
             console.warn(`Skipping record ${i + 1}: No valid latitude/longitude`);
             errorCount++;
@@ -210,7 +202,6 @@ async function processAndDisplayData() {
         }
 
         try {
-            // Create location object directly from lat/lng
             const location = { lat: lat, lng: lng };
             createMarker(location, record);
             successCount++;
@@ -222,7 +213,6 @@ async function processAndDisplayData() {
         }
     }
 
-    // Fit map bounds to show all markers
     if (markers.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         markers.forEach(marker => {
@@ -245,27 +235,22 @@ function searchCompanies(searchTerm) {
     let bestMatch = null;
     let bestMatchIndex = -1;
 
-    // Close all info windows first
     markers.forEach(m => {
         if (m.infoWindow) {
             m.infoWindow.close();
         }
     });
 
-    // Search for the best match
     allData.forEach((data, index) => {
-        // Get company name and DOT number
         const companyName = (data.name || data.Name || data.company || data.Company || '').toLowerCase();
         const dotNumber = (data.dot || data.DOT || data.Dot || '').toLowerCase();
 
-        // Check for exact match first
         if (companyName === term || dotNumber === term) {
             bestMatch = data;
             bestMatchIndex = index;
             return;
         }
 
-        // Check for partial match
         if (!bestMatch && (companyName.includes(term) || dotNumber.includes(term))) {
             bestMatch = data;
             bestMatchIndex = index;
@@ -275,11 +260,9 @@ function searchCompanies(searchTerm) {
     if (bestMatch && bestMatchIndex !== -1) {
         const marker = markers[bestMatchIndex];
 
-        // Center map on the match
         map.setCenter(marker.getPosition());
         map.setZoom(15);
 
-        // Open info window
         if (marker.infoWindow) {
             marker.infoWindow.open(map, marker);
         }
@@ -287,7 +270,7 @@ function searchCompanies(searchTerm) {
         const companyName = bestMatch.name || bestMatch.Name || bestMatch.company || bestMatch.Company || 'Company';
         updateStatus(`Found: ${companyName}`);
     } else {
-        updateStatus(`No match found for "${searchTerm}"`, true);
+        updateStatus(`No match found for "${escapeHtml(searchTerm)}"`, true);
     }
 }
 
@@ -298,27 +281,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearSearchBtn = document.getElementById('clearSearchBtn');
 
     loadDataBtn.addEventListener('click', () => {
-        if (!CONFIG.API_KEY || CONFIG.API_KEY === 'YOUR_GOOGLE_API_KEY') {
-            updateStatus('Please configure your API key in config.js', true);
+        if (!CONFIG || !CONFIG.API_KEY || CONFIG.API_KEY === 'YOUR_GOOGLE_API_KEY') {
+            updateStatus('Please configure your API key', true);
             return;
         }
 
         if (!CONFIG.SHEET_ID || CONFIG.SHEET_ID === 'YOUR_GOOGLE_SHEET_ID') {
-            updateStatus('Please configure your Sheet ID in config.js', true);
+            updateStatus('Please configure your Sheet ID', true);
             return;
         }
 
         processAndDisplayData();
     });
 
-    // Search on Enter key
     searchBox.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             searchCompanies(e.target.value);
         }
     });
 
-    // Clear search button
     clearSearchBtn.addEventListener('click', () => {
         searchBox.value = '';
         updateStatus('Search cleared');
