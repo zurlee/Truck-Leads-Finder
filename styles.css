@@ -155,6 +155,47 @@ h1 {
     border-bottom-color: #2980b9;
 }
 
+/* Zone Controls */
+.zone-controls {
+    margin-top: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.zone-label {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+#zone-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.zone-btn {
+    color: white;
+    border: 2px solid transparent;
+    padding: 8px 14px;
+    font-size: 13px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s ease, border-color 0.2s ease;
+    opacity: 0.85;
+}
+
+.zone-btn:hover {
+    opacity: 1;
+}
+
+.zone-btn.active {
+    border-color: white;
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     h1 {

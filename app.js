@@ -2,6 +2,10 @@ let map;
 let markers = [];
 let geocoder;
 let allData = [];
+let zonesData = {};
+let zoneOverlays = [];
+let zipCache = {};
+let activeZone = null;
 
 // Initialize Google Map
 function initMap() {
@@ -15,6 +19,7 @@ function initMap() {
 
     geocoder = new google.maps.Geocoder();
     updateStatus('Map initialized. Ready to load data.');
+    loadZones();
 }
 
 // Update status message
@@ -272,6 +277,156 @@ function searchCompanies(searchTerm) {
     } else {
         updateStatus(`No match found for "${escapeHtml(searchTerm)}"`, true);
     }
+}
+
+// Zone colors for each zone
+const ZONE_COLORS = [
+    '#e74c3c', // red
+    '#3498db', // blue
+    '#2ecc71', // green
+    '#f39c12', // orange
+    '#9b59b6', // purple
+    '#1abc9c', // teal
+    '#e67e22', // dark orange
+    '#34495e'  // dark blue-grey
+];
+
+// Format zone key into a readable name
+function formatZoneName(key) {
+    return key
+        .replace(/^zone_\d+_/, '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Load zones from zones.json and create buttons
+async function loadZones() {
+    try {
+        const response = await fetch('zones.json');
+        if (!response.ok) return;
+        zonesData = await response.json();
+
+        const container = document.getElementById('zone-buttons');
+        const clearBtn = document.getElementById('clearZonesBtn');
+        const keys = Object.keys(zonesData);
+
+        if (keys.length === 0) return;
+
+        keys.forEach((key, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'zone-btn';
+            btn.textContent = formatZoneName(key);
+            btn.style.backgroundColor = ZONE_COLORS[index % ZONE_COLORS.length];
+            btn.dataset.zone = key;
+            btn.dataset.color = ZONE_COLORS[index % ZONE_COLORS.length];
+            btn.addEventListener('click', () => toggleZone(key, btn));
+            container.appendChild(btn);
+        });
+
+        clearBtn.style.display = 'inline-block';
+        clearBtn.addEventListener('click', clearAllZones);
+    } catch (err) {
+        console.warn('Could not load zones.json:', err);
+    }
+}
+
+// Geocode a single ZIP code with caching
+function geocodeZip(zip) {
+    if (zipCache[zip]) {
+        return Promise.resolve(zipCache[zip]);
+    }
+    return new Promise((resolve, reject) => {
+        geocoder.geocode({ address: zip, componentRestrictions: { country: 'US' } }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+                const loc = results[0].geometry.location;
+                const bounds = results[0].geometry.bounds || results[0].geometry.viewport;
+                zipCache[zip] = { location: loc, bounds: bounds };
+                resolve(zipCache[zip]);
+            } else {
+                reject(new Error(`Geocode failed for ${zip}: ${status}`));
+            }
+        });
+    });
+}
+
+// Process ZIP codes in batches to avoid rate limiting
+async function geocodeZipBatch(zips, batchSize = 10, delayMs = 200) {
+    const results = [];
+    for (let i = 0; i < zips.length; i += batchSize) {
+        const batch = zips.slice(i, i + batchSize);
+        const batchResults = await Promise.allSettled(batch.map(z => geocodeZip(z)));
+        for (let j = 0; j < batchResults.length; j++) {
+            if (batchResults[j].status === 'fulfilled') {
+                results.push({ zip: batch[j], data: batchResults[j].value });
+            }
+        }
+        if (i + batchSize < zips.length) {
+            await new Promise(r => setTimeout(r, delayMs));
+        }
+    }
+    return results;
+}
+
+// Clear zone overlays from the map
+function clearZoneOverlays() {
+    zoneOverlays.forEach(overlay => overlay.setMap(null));
+    zoneOverlays = [];
+}
+
+// Toggle a zone on/off
+async function toggleZone(zoneKey, btn) {
+    // If this zone is already active, turn it off
+    if (activeZone === zoneKey) {
+        clearAllZones();
+        return;
+    }
+
+    // Deactivate previous zone button
+    document.querySelectorAll('.zone-btn.active').forEach(b => b.classList.remove('active'));
+    clearZoneOverlays();
+
+    activeZone = zoneKey;
+    btn.classList.add('active');
+
+    const zips = zonesData[zoneKey];
+    const color = btn.dataset.color;
+
+    updateStatus(`Loading zone: ${formatZoneName(zoneKey)} (${zips.length} ZIP codes)...`);
+
+    const results = await geocodeZipBatch(zips);
+
+    if (results.length === 0) {
+        updateStatus('Could not geocode any ZIP codes for this zone.', true);
+        return;
+    }
+
+    const bounds = new google.maps.LatLngBounds();
+
+    results.forEach(({ zip, data }) => {
+        const circle = new google.maps.Circle({
+            strokeColor: color,
+            strokeOpacity: 0.6,
+            strokeWeight: 1,
+            fillColor: color,
+            fillOpacity: 0.25,
+            map: map,
+            center: data.location,
+            radius: 3000 // ~3km radius per ZIP
+        });
+        zoneOverlays.push(circle);
+        bounds.extend(data.location);
+    });
+
+    map.fitBounds(bounds);
+    updateStatus(`Zone "${formatZoneName(zoneKey)}" highlighted (${results.length}/${zips.length} ZIP codes mapped).`);
+}
+
+// Clear all zone highlights
+function clearAllZones() {
+    clearZoneOverlays();
+    activeZone = null;
+    document.querySelectorAll('.zone-btn.active').forEach(b => b.classList.remove('active'));
+    updateStatus('Zone highlights cleared.');
 }
 
 // Event listeners
