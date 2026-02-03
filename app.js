@@ -19,7 +19,6 @@ function initMap() {
 
     geocoder = new google.maps.Geocoder();
     updateStatus('Map initialized. Ready to load data.');
-    loadZones();
 }
 
 // Update status message
@@ -459,4 +458,6 @@ document.addEventListener('DOMContentLoaded', () => {
         searchBox.value = '';
         updateStatus('Search cleared');
     });
+
+    loadZones();
 });
